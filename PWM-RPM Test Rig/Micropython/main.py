@@ -2,8 +2,10 @@
 # for EEE 488/489 Senior Design I & II
 # Autonomous High-Altitude Balloon Payload 
 
-from machine import Pin, PWM
+from machine import Pin, PWM, SPI
 from time import sleep
+import sdcard
+import os
 
 #### CONSTANTS ###
 pi = 3.141592653589
@@ -26,6 +28,17 @@ pwm_motor = PWM(Pin(0))
 pwm_built_in.freq(1000)
 pwm_motor.freq(50)
 
+# Initialize the SD card reader
+spi = SPI(1, baudrate = 40000000, sck = Pin(10), mosi = Pin(11), miso = Pin(12))
+sd = sdcard.SDCard(spi, Pin(13))
+vfs = os.VfsFat(sd)
+ 
+# Mount the SD card, open file
+os.mount(sd, '/sd')
+print(os.listdir('/sd'))
+file = open("/sd/rpm-pwm_data.txt", "w")
+file.write(f"PWM-RPMs Data")
+file.write(f"PWM = {PWM_val}")
 
 def IR_handler(pin):
     global revolutions
@@ -53,11 +66,11 @@ pwm_motor.duty_u16(1000)
 sleep(1) # delay 1 second
 
 
-def loop():
+def test_loop():
     global revolutions
     global sleep_time
     # turn on motor
-    if (sleep_time <= 10):
+    if (sleep_time <= 7):
         pwm_motor.duty_u16(PWM_val) # turn on motor
         
  
@@ -81,7 +94,8 @@ def loop():
         print(f"Estimated RPMs: {RPMs}")
         print(f"Estimated angular velocity: {omega} rad/s")
         print()
-        
+        file.write(f"{RPMs},{omega}")
+         
         if (sleep_time <= 3.5):
             # increment time
             sleep_time += 0.5
@@ -89,10 +103,11 @@ def loop():
             sleep_time += 1
         
     else:
-        print(f"Reached limit of program, please restart")
-
-    sleep(20)
+        print(f"*** Reached limit of program, please close and remove SD card ***")
+        file.close()
+        
+    sleep(40)
 
 
 while True:
-    loop()
+    test_loop()
