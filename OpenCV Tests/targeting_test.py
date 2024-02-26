@@ -5,7 +5,7 @@
 #  and determines the vector from the center of the image to those points.
 
 #import numpy as np
-from picamera import Picamera2
+#from picamera import Picamera2
 import cv2 as cv
 import time
 
@@ -26,11 +26,11 @@ def main():
     min_threshold = 245
     start = time.perf_counter()
 
-    image = get_image()
-    
+
     # import image
-    #filename = "test_image.jpg"
-    #image = cv.imread(filename)
+    ##image = get_image()  # from camera
+    filename = "test_image.jpg" # from file
+    image = cv.imread(filename)
     rows, columns, _ = image.shape
 
     # copy and convert image to grayscale then process
@@ -76,7 +76,7 @@ def main():
     print(f"Time elapsed: {time_ms} ms")
     print(f"Max control loop frequency: {maxFreq} Hz")
 
-    #cv.imshow("gray", image)
+    cv.imshow("gray", image)
     cv.imwrite("cv_edit_" + filename, image)
 
             
