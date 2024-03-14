@@ -5,6 +5,10 @@ import datetime
 pi = 3.14159265358979323846
 
 
+# eliminate math import
+# incorporate into video_thresholding.py for ideal tracking
+
+
 def get_compass_direction(angle):
     # this just converts to cardinal directions for ease of use
     #  not to be used in actual operation
