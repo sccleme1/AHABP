@@ -28,7 +28,7 @@ def import_data_from_csv(file_path):
     return a, ax, ay, az, t
 
 # Example usage:
-file_path = 'imu_data.csv'  # Change this to your CSV file path
+file_path = 'v3_loaded_imu_data.csv'  # Change this to your CSV file path
 a, ax, ay, az, t = import_data_from_csv(file_path)
 
 
@@ -37,7 +37,7 @@ plt.plot(t, ax, label="ax")
 plt.plot(t, ay, label="ay")
 plt.plot(t, az, label="az")
 plt.legend()
-plt.title("IMU Data for HAABP Drop Test")
+plt.title("IMU Data for HAABP Drop Test\n15 March 2024")
 plt.ylabel("Acceleration [G]")
 plt.xlabel("Time [s]")
 plt.savefig('IMU_Plot.png')
