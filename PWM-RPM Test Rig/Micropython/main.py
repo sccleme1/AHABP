@@ -2,14 +2,13 @@
 # for EEE 488/489 Senior Design I & II
 # Autonomous High-Altitude Balloon Payload 
 
-from machine import Pin, PWM, SPI
+from machine import Pin, PWM
 from time import sleep
-import sdcard
 import os
 
 #### CONSTANTS ###
 pi = 3.141592653589
-diameter = 0.95       # m
+diameter = 0.095      # m
 radius = diameter/2   # m
 
 ### GLOBAL VARIABLES ###
@@ -28,15 +27,8 @@ pwm_motor = PWM(Pin(0))
 pwm_built_in.freq(1000)
 pwm_motor.freq(50)
 
-# Initialize the SD card reader
-spi = SPI(1, baudrate = 40000000, sck = Pin(10), mosi = Pin(11), miso = Pin(12))
-sd = sdcard.SDCard(spi, Pin(13))
-vfs = os.VfsFat(sd)
- 
-# Mount the SD card, open file
-os.mount(sd, '/sd')
-print(os.listdir('/sd'))
-file = open("/sd/rpm-pwm_data.txt", "w")
+# open file for writing
+file = open("rpm_data.csv", "w")
 file.write(f"PWM-RPMs Data")
 file.write(f"PWM = {PWM_val}")
 
@@ -74,7 +66,6 @@ def test_loop():
         pwm_motor.duty_u16(PWM_val) # turn on motor
         
  
-        #sleep(7) # wait to get up to speed
         sleep(sleep_time) # wait to get up to speed
 
         revolutions = 0
@@ -89,12 +80,12 @@ def test_loop():
         pwm_motor.duty_u16(0) # turn off motor
         
         
-        print(f"PWM: {PWM_val} for {sleep_time} s")
-        print(f"Recorded interrupts: {revolutions}")
-        print(f"Estimated RPMs: {RPMs}")
-        print(f"Estimated angular velocity: {omega} rad/s")
-        print()
-        file.write(f"{RPMs},{omega}")
+#         print(f"PWM: {PWM_val} for {sleep_time} s")
+#         print(f"Recorded interrupts: {revolutions}")
+#         print(f"Estimated RPMs: {RPMs}")
+#         print(f"Estimated angular velocity: {omega} rad/s")
+#         print()
+        file.write(f"{RPMs},{omega}\n")
          
         if (sleep_time <= 3.5):
             # increment time
@@ -103,7 +94,7 @@ def test_loop():
             sleep_time += 1
         
     else:
-        print(f"*** Reached limit of program, please close and remove SD card ***")
+        print(f"*** Program ended ***")
         file.close()
         
     sleep(40)
