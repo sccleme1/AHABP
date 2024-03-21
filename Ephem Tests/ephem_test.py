@@ -1,11 +1,8 @@
 import ephem
-from math import degrees
 import datetime
 
 pi = 3.14159265358979323846
 
-
-# eliminate math import
 # incorporate into video_thresholding.py for ideal tracking
 
 
@@ -27,12 +24,11 @@ def sun_angle_and_direction(latitude, longitude, date):
     observer.date = date
     sun = ephem.Sun(observer)
 
-    zenith_angle = 90 - degrees(sun.alt)
-    azimuth_angle = degrees(sun.az)
-    azimuth_angle_degrees = azimuth_angle % 360
-    compass_direction = get_compass_direction(azimuth_angle_degrees)
+    zenith_angle = 90 - sun.alt*180/pi
+    azimuth_angle = (sun.az*180/pi) % 360
+    compass_direction = get_compass_direction(azimuth_angle)
 
-    return zenith_angle, azimuth_angle_degrees, compass_direction
+    return zenith_angle, azimuth_angle, compass_direction
 
 
 def movement_needed(payload_heading, azimuth_angle, zenith_angle):
@@ -46,23 +42,29 @@ if __name__ == "__main__":
 
     # Tempe, AZ lat/long
     # actual location needs to be streamed from the GPS
-    latitude = 33.427204
-    longitude = -111.939896
+    #latitude = 33.427204
+    #longitude = -111.939896
+
+    # Austin, TX lat/long
+    latitude = 30.266666
+    longitude = -97.733330
 
     # actual payload heading in degrees
     payload_heading = 88
 
     # actual camera pitch in degrees
-    # 0 corresponds to horizontal
+    # 0 is horizontal
+    # +76 is maximum
+    # -28 is minimum
     camera_angle = 0
 
     # date format: '2024-03-12 12:00:00'
-    date = datetime.datetime(2024, 4, 8, 13, 9, 1, 130320, tzinfo=datetime.timezone.utc)
+    date = datetime.datetime(2024, 4, 8, 13, 35, 1, 130320, tzinfo=datetime.timezone.utc)
     zenith_angle, azimuth_angle, compass_direction = sun_angle_and_direction(latitude, longitude, date)
     yaw, pitch = movement_needed(payload_heading, azimuth_angle, zenith_angle)
 
     # print out the given information
-    #  not to be used in actual operation
+    # not to be used in actual operation
     print("Date", date)
     print("Latitude:", latitude)
     print("Longitude:", longitude)
