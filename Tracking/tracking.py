@@ -34,7 +34,8 @@ file.write(f"Time,Latitude,Longitude,Altitude,Zenith,Azimuth,Heading,Camera,Yaw,
 file.close()
 
 capture = cv.VideoCapture(0)
-
+cx = 320
+cy = 240
 
 print('#### Running ahabp_node_tracking.py ####')
 
