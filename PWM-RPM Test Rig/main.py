@@ -4,6 +4,8 @@
 
 from machine import Pin, PWM, Timer
 from time import sleep
+import time
+import math
 
 revolutions = 0
 hits = 0
@@ -14,24 +16,34 @@ dt = 0.1
 pi = 3.141592653589
 diameter = 0.095      # m
 radius = diameter/2   # m
-
+frequency = 100 	      # Hz
 ### GLOBAL VARIABLES ###
 
 # PWM Value for motor
-# Minimum = 
-PWM_val = 13000
+# Minimum = 7000
+# Maximum = 8000
+PWM_val = 7000
+duty_time = int(1e6 * PWM_val/ (frequency * 65535) ) # us
 
 # Setup pins and PWM frequency
 pwm_built_in = PWM(Pin(25))
-pwm_motor = PWM(Pin(0))
+pwm_motor_top = PWM(Pin(15))    # CW
+pwm_motor_bottom = PWM(Pin(14)) # CCW
 
-pwm_built_in.freq(100)
-pwm_motor.freq(100)
+#pwm_built_in.freq(100)
+pwm_built_in.freq(frequency)
+pwm_motor_top.freq(frequency)
+pwm_motor_bottom.freq(frequency)
+
+
+max_duty_cycle = 7800
+min_duty_cycle = 0
+# MIN 7400
+# MAX 
 
 # open file for writing
-file=open("rpm_data.csv", "w")
-file.write(f"PWM-RPMs Data\n")
-file.write(f"PWM = {PWM_val}\n")
+#file=open(f"rpm_data_duty_{duty_time}.csv", "w")
+#file.write(f"{PWM_val}\n")
 
 
 def IR_handler(pin):
@@ -41,49 +53,56 @@ def IR_handler(pin):
 
     if Pin.IRQ_RISING:
         hits += 1
-        if hits >= 3:
-            revolutions += 1
-            hits = 0
 
 
 def record_rpms():
     global revolutions
     global current_time
     global dt
+    global hits
     revolutions = 0
 
     IR_pin.irq(trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING, handler=IR_handler)
     sleep(dt) # test for 0.01 seconds
+    #file.write(str(round(current_time, 1)) + "," + str(hits*200) + "\n")
+    hits = 0
     IR_pin.irq(trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING, handler=None)
+    
 
     #print(str(current_time) + "," + str(revolutions) + "\n")
 
-    file.write(str(round(current_time, 1)) + "," + str(revolutions) + "\n")
     
 
 # Setup IR pin and IR interrupt handler
-IR_pin = machine.Pin(15, machine.Pin.IN, machine.Pin.PULL_UP)  # GPIO 15 with internal pull-up resistor
+IR_pin = machine.Pin(21, machine.Pin.IN, machine.Pin.PULL_UP)  # GPIO 21 with internal pull-up resistor
 #IR_pin.irq(trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING, handler=IR_handler)
 
 # start auto calibration of ESC
-pwm_motor.duty_u16(10000)
+pwm_motor_top.duty_u16(3277)
+pwm_motor_bottom.duty_u16(3277)
 pwm_built_in.duty_u16(1000)
 sleep(1) # delay 1 second
 
-print(f"*** Program starting ***")
-print(f" 5 seconds at {PWM_val} PWM")
+print(f"*** Test starting ***")
+print(f" 5 seconds at {PWM_val} PWM, for duty time of {duty_time} us")
 # turn on motor
-pwm_motor.duty_u16(PWM_val) # turn on motor
+pwm_motor_top.duty_u16(PWM_val) # turn on motor
+
+pwm_motor_bottom.duty_u16(PWM_val) # turn on motor
 pwm_built_in.duty_u16(PWM_val)
 
 while current_time <= 5:
-    record_rpms()
-    current_time += dt
+    #record_rpms()
     print(f"Time: {round(current_time, 1)}", end="\r")
+    current_time += dt
+    sleep(dt)
+
+
     
-pwm_motor.duty_u16(0) # turn off motor
-    
-file.close()
-print(f"*** Program ended ***")
+pwm_motor_top.duty_u16(0) # turn off motor
+pwm_motor_bottom.duty_u16(0) # turn off motor
+
+#file.close()
+print(f"*** Test ended ***")
 
 

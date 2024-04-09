@@ -25,7 +25,11 @@ setpoint = 90
 top_output = 0
 bottom_output = 0
 # minimum disarm value for motors
-disarm = 10000
+frequency = 100     # Hz
+disarm = 3277
+PWM_base = 7500
+# MIN 7000
+# MAX 8000
 
 # timer for PID control
 PID_timer = Timer(-1)
@@ -33,11 +37,11 @@ PID_timer = Timer(-1)
 # MPU6050 inertial measurement unit (IMU)
 IMU_i2c = I2C(0, sda=Pin(16), scl=Pin(17), freq=400000)
 imu = MPU6050(IMU_i2c)
+imu.accel_range = 3
 
 # QMC5883L magnetometer (compass)
 MAG_i2c = I2C(1, sda=Pin(26), scl=Pin(27), freq=100000)
 qmc5883 = QMC5883L(MAG_i2c)
-imu.accel_range = 3
 
 # GPS receiver
 gpsModule = UART(1, baudrate=9600, tx=Pin(4), rx=Pin(5))
@@ -51,21 +55,34 @@ GPStime = ""
 nmea_data = ""
 
 # PWM control for ESCs
-pwm_top_motor = PWM(Pin(14))
-pwm_top_motor.freq(100)
-pwm_bottom_motor = PWM(Pin(15))
-pwm_bottom_motor.freq(100)
+pwm_motor_top = PWM(Pin(15)) #
+pwm_motor_bottom = PWM(Pin(14)) #
+pwm_motor_top.freq(frequency)
+pwm_motor_bottom.freq(frequency)
 sleep(1)
-pwm_top_motor.duty_u16(disarm) # turn on top motor
-pwm_bottom_motor.duty_u16(disarm) # turn on bottom motor
+pwm_motor_top.duty_u16(disarm) # disarm value on top motor
+pwm_motor_bottom.duty_u16(disarm) # disarm value on bottom motor
 
 # PWM control for camera servo on GP13
 camera_servo = Servo(13)
 # UP = 0
 # Horizontal = 80
 # DOWN = 135
+try:
+    file=open(f"start_log.txt", "w")
+    file.write(f"Start log begin")
+    file.write(f"kp {kp}, ki {ki}, kd {kd}\n")
+    file.write(f"GPS is on {gpsModule}\n")
+    file.write(f"Top motor on GP15\n")
+    file.write(f"Bottom motor on GP14\n")
+    file.write(f"ESC frequency {frequency} Hz\n")
+    file.write(f"Disarm: {disarm}\n")
+    file.write(f"PWM Base: {PWM_base}\n")
+    file.write(f"Servo motor on GP13\n")
+    file.write(f"Starting GPS, unused NMEA sentences:\n")
+except:
+    pass
 
-start_time = time.time()
 
 def servo_Map(x, in_min, in_max, out_min, out_max):
     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
@@ -81,15 +98,7 @@ def servo_Angle(angle):
 
 
 def PID(t):
-    global kp
-    global ki
-    global kd
-    global integral
-    global last_error
-    global heading
-    global setpoint
-    global top_output
-    global bottom_output
+    global kp, ki, kd, integral, last_error, heading, setpoint, top_output, bottom_output
     dt = 0.25 # s
     
     error = setpoint - heading
@@ -100,7 +109,7 @@ def PID(t):
     # TODO: determine left/right directional spin
     #       set top_output and bottom_output
     #       limit outputs max and min values
-    output = max(0, min(raw_output, 2000))
+    output = max(0, min(raw_output, 1000))
     #print("setpoint:", setpoint, "heading:", round(heading, 2), "error", round(error, 2), "PID output:", output, "integral", integral, "          ", end="\r")
 
 
@@ -135,7 +144,7 @@ def getGPS(gpsModule, timeout=1):
                 
                 latitude = convertToDegree(parts[2])
                 longitude = convertToDegree(parts[4])
-
+                
                 if (parts[3] == 'S'):
                     latitude = -latitude
                 if (parts[5] == 'W'):
@@ -160,6 +169,8 @@ def getGPS(gpsModule, timeout=1):
         
         return buff
 
+##### START MAIN PROGRAM #####
+sleep(10) # wait for Pi to boot up
 # set camera servo to horizontal and start uart serial
 servo_Angle(80)
 uart = machine.UART(0, 115200)
@@ -170,17 +181,35 @@ msg = ""
 
 ##### START BY FINDING GPS LOCATION #####
 print("Acquiring GPS lock, unused NMEA sentences:")
-#uart.write("\n\rAcquiring GPS lock, omitting unused NMEA sentences\n\r")
+uart.write(",--------------------\n\r")
+uart.write("Serial from Pico initiated, acquiring GPS lock...\n\r")
+new_setpoint = None
+start_time = time.time()
+
 while True:
     current_time = time.time()
     elapsed_time = current_time - start_time
     buff = getGPS(gpsModule, 3)
+    try:
+        file.write(f"t = {elapsed_time} ")
+        file.write(buff)
+        file.write("\n")
+    except:
+        pass
     #uart.write(buff)
     sleep(1)
     if (latitude != "") and (latitude != None):
         if (longitude != "") and (longitude != None):
             break
 
+try:
+    file.write(f"Latitude: {latitude} Longitude: {longitude}\n")
+    file.write(f"Start log end")
+    file.close()
+except:
+    pass
+
+print("Latitude: ", latitude, " Longitude: ", longitude)
 ##### NOW SEND LOCATION TO PI FOR EPHEM CALCULATION OF SETPOINT #####
 # Serial communication with Raspberry Pi
 while True:
@@ -193,11 +222,24 @@ while True:
 ##### START PID CONTROL #####
 PID_timer.init(mode=Timer.PERIODIC, freq=4, callback=PID)
 imu.accel.calibrate
-new_setpoint = None
 
-print("LATITUDE: ", latitude, " LONGITUDE: ", longitude)
+
+
+##### START WHEELS AT BASE SPEED #####
+pwm_motor_top.duty_u16(PWM_base)
+pwm_motor_bottom.duty_u16(PWM_base)
+try:
+    log_file=open("run_log.csv", "w")
+    log_file.write(f"Time [s],Hx,Hy,Hz,Ax,Ay,Az,Heading,Integral\n")
+    log_file.close()
+except:
+    pass
+
+start_time = time.time()
 
 while True:
+    current_time = time.time()
+    elapsed_time = current_time - start_time
     
     if uart.any():
         ##### FORMAT: {heading},{pitch}
@@ -232,5 +274,10 @@ while True:
     # S = 180
     x, y, z, temp = qmc5883.read_scaled()
     heading = degrees(atan2(x, y))
-    print("Heading:\t", round(heading, 2), "IMU ax:\t", round(imu.accel.x, 2), "ay:\t", round(imu.accel.y, 2), "az:\t", round(imu.accel.z, 2), "integral\t", integral, end="\r")
+    #print("Heading:\t", round(heading, 2), "IMU ax:\t", round(imu.accel.x, 2), "ay:\t", round(imu.accel.y, 2), "az:\t", round(imu.accel.z, 2), "integral\t", integral, end="\r")
+    try:
+        with open("run_log.csv", "a") as data_file:
+            data_file.write(f"{time_elapsed},{x},{y},{z},{ax},{ay},{az},{heading},{integral}\n")
+    except:
+        pass
     sleep(0.05)
