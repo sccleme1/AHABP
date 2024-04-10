@@ -13,23 +13,22 @@ from math import atan2, degrees
 from servo import Servo
 
 # PID gains
-kp = 5
-ki = 0.1
-kd = 0.1
+kp = 20
+ki = 0
+kd = 0
 integral = 0
 last_error = 0
 
 # global setpoints
-heading = 0
-setpoint = 90
-top_output = 0
-bottom_output = 0
+smooth_heading = 0
+setpoint = 0
+output = 0
 # minimum disarm value for motors
 frequency = 100     # Hz
 disarm = 3277
-PWM_base = 7500
+PWM_base = 8000
 # MIN 7000
-# MAX 8000
+# MAX 9000
 
 # timer for PID control
 PID_timer = Timer(-1)
@@ -70,15 +69,15 @@ camera_servo = Servo(13)
 # DOWN = 135
 try:
     file=open(f"start_log.txt", "w")
-    file.write(f"Start log begin")
-    file.write(f"kp {kp}, ki {ki}, kd {kd}\n")
+    file.write(f"Start log begin\n")
+    file.write(f"kp ={kp}, ki ={ki}, kd ={kd}\n")
     file.write(f"GPS is on {gpsModule}\n")
     file.write(f"Top motor on GP15\n")
     file.write(f"Bottom motor on GP14\n")
     file.write(f"ESC frequency {frequency} Hz\n")
     file.write(f"Disarm: {disarm}\n")
     file.write(f"PWM Base: {PWM_base}\n")
-    file.write(f"Servo motor on GP13\n")
+    file.write(f"Servo motor on GP13\n\n")
     file.write(f"Starting GPS, unused NMEA sentences:\n")
 except:
     pass
@@ -98,10 +97,10 @@ def servo_Angle(angle):
 
 
 def PID(t):
-    global kp, ki, kd, integral, last_error, heading, setpoint, top_output, bottom_output
-    dt = 0.25 # s
+    global kp, ki, kd, integral, last_error, smooth_heading, setpoint, output
+    dt = 0.1 # s
     
-    error = setpoint - heading
+    error = setpoint - smooth_heading
     integral += error*dt
     derivative = (error - last_error)/dt
     last_error = error
@@ -111,6 +110,8 @@ def PID(t):
     #       limit outputs max and min values
     output = max(0, min(raw_output, 1000))
     #print("setpoint:", setpoint, "heading:", round(heading, 2), "error", round(error, 2), "PID output:", output, "integral", integral, "          ", end="\r")
+    pwm_motor_top.duty_u16(PWM_base + output)
+    pwm_motor_bottom.duty_u16(PWM_base - output)
 
 
 def convertToDegree(RawDegrees):
@@ -220,22 +221,25 @@ while True:
 #uart.txdone()
 
 ##### START PID CONTROL #####
-PID_timer.init(mode=Timer.PERIODIC, freq=4, callback=PID)
+PID_timer.init(mode=Timer.PERIODIC, freq=10, callback=PID)
 imu.accel.calibrate
-
-
 
 ##### START WHEELS AT BASE SPEED #####
 pwm_motor_top.duty_u16(PWM_base)
 pwm_motor_bottom.duty_u16(PWM_base)
 try:
     log_file=open("run_log.csv", "w")
-    log_file.write(f"Time [s],Hx,Hy,Hz,Ax,Ay,Az,Heading,Integral\n")
-    log_file.close()
+    log_file.write(f"Time,Hx,Hy,Hz,Ax,Ay,Az,Heading,PID_Output,Integral,Setpoint\n")
 except:
     pass
 
 start_time = time.time()
+
+# for averaging the heading to smooth it easier
+prev_heading_1 = 0
+prev_heading_2 = 0
+
+total_time = 0
 
 while True:
     current_time = time.time()
@@ -254,7 +258,7 @@ while True:
             pitch = int(msg_parts[1])
             #print("New setpoint:", new_setpoint)
             #print("Pitch:", pitch)
-            if (new_setpoint != None) and (new_setpoint >= -180) and (new_setpoint <= 180):
+            if (new_setpoint != None) and (new_setpoint >= 0) and (new_setpoint <= 360):
                 integral = 0    # a new heading requires a reset to integral
                 setpoint = new_setpoint
                 # set camera servo here
@@ -266,18 +270,33 @@ while True:
             elif (pitch != None):
                 servo_Angle(pitch)
         except:
-            print("error with importing heading and pitch")
+            #print("error with importing heading and pitch")
             pass
     
     # Heading:
     # N = 0
     # S = 180
     x, y, z, temp = qmc5883.read_scaled()
-    heading = degrees(atan2(x, y))
+    heading = degrees(atan2(y, x))
+    smooth_heading = (heading + prev_heading_1 + prev_heading_2)/3
+    prev_heading_2 = prev_heading_1
+    prev_heading_1 = heading
+    ax = round(imu.accel.x, 2)
+    ay = round(imu.accel.y, 2)
+    az = round(imu.accel.z, 2)
     #print("Heading:\t", round(heading, 2), "IMU ax:\t", round(imu.accel.x, 2), "ay:\t", round(imu.accel.y, 2), "az:\t", round(imu.accel.z, 2), "integral\t", integral, end="\r")
     try:
-        with open("run_log.csv", "a") as data_file:
-            data_file.write(f"{time_elapsed},{x},{y},{z},{ax},{ay},{az},{heading},{integral}\n")
+        log_file.write(f"{total_time},{x},{y},{z},{ax},{ay},{az},{smooth_heading},{output},{integral},{setpoint}\n")
     except:
         pass
+    
     sleep(0.05)
+    total_time += 0.05
+    if total_time >= 30:
+        PID_timer.deinit()
+        break
+
+# turn off motors and close log file
+pwm_motor_top.duty_u16(0)
+pwm_motor_bottom.duty_u16(0)
+log_file.close()
