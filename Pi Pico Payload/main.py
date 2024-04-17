@@ -13,22 +13,24 @@ from math import atan2, degrees
 from servo import Servo
 
 # PID gains
-kp = 20
-ki = 0
-kd = 0
+kp = 10
+ki = 0.75
+kd = 0.75
 integral = 0
+error = 0
 last_error = 0
 
 # global setpoints
 smooth_heading = 0
 setpoint = 0
 output = 0
+declination = 0
 # minimum disarm value for motors
 frequency = 100     # Hz
 disarm = 3277
-PWM_base = 8000
+PWM_base = 7900
 # MIN 7000
-# MAX 9000
+# MAX 10000
 
 # timer for PID control
 PID_timer = Timer(-1)
@@ -93,12 +95,11 @@ def servo_Angle(angle):
     if angle > 180:
         angle = 180
     camera_servo.goto(round(servo_Map(angle,0,180,0,1024))) # Convert range value to angle value
-    #print("angle", angle, "           ", end="\r")
 
 
 def PID(t):
-    global kp, ki, kd, integral, last_error, smooth_heading, setpoint, output
-    dt = 0.1 # s
+    global kp, ki, kd, integral, last_error, smooth_heading, setpoint, output, error
+    dt = 0.05 # s
     
     error = setpoint - smooth_heading
     integral += error*dt
@@ -108,10 +109,13 @@ def PID(t):
     # TODO: determine left/right directional spin
     #       set top_output and bottom_output
     #       limit outputs max and min values
-    output = max(0, min(raw_output, 1000))
-    #print("setpoint:", setpoint, "heading:", round(heading, 2), "error", round(error, 2), "PID output:", output, "integral", integral, "          ", end="\r")
+    output = int(max(-900, min(raw_output, 900)))
+    
     pwm_motor_top.duty_u16(PWM_base + output)
     pwm_motor_bottom.duty_u16(PWM_base - output)
+#     sleep(0.1)
+#     pwm_motor_top.duty_u16(PWM_base)
+#     pwm_motor_bottom.duty_u16(PWM_base)
 
 
 def convertToDegree(RawDegrees):
@@ -171,7 +175,7 @@ def getGPS(gpsModule, timeout=1):
         return buff
 
 ##### START MAIN PROGRAM #####
-sleep(10) # wait for Pi to boot up
+sleep(5) # wait for Pi to boot up
 # set camera servo to horizontal and start uart serial
 servo_Angle(80)
 uart = machine.UART(0, 115200)
@@ -198,6 +202,10 @@ while True:
     except:
         pass
     #uart.write(buff)
+    ##### FOR TESTING ONLY, REMOVE #####
+    if elapsed_time > 2:
+        latitude = 33.42017
+        longitude = -111.9047
     sleep(1)
     if (latitude != "") and (latitude != None):
         if (longitude != "") and (longitude != None):
@@ -221,7 +229,7 @@ while True:
 #uart.txdone()
 
 ##### START PID CONTROL #####
-PID_timer.init(mode=Timer.PERIODIC, freq=10, callback=PID)
+PID_timer.init(mode=Timer.PERIODIC, freq=20, callback=PID)
 imu.accel.calibrate
 
 ##### START WHEELS AT BASE SPEED #####
@@ -229,7 +237,7 @@ pwm_motor_top.duty_u16(PWM_base)
 pwm_motor_bottom.duty_u16(PWM_base)
 try:
     log_file=open("run_log.csv", "w")
-    log_file.write(f"Time,Hx,Hy,Hz,Ax,Ay,Az,Heading,PID_Output,Integral,Setpoint\n")
+    log_file.write(f"Time,Hx,Hy,Hz,Ax,Ay,Az,PID_Output,Integral,Setpoint,XY-Heading,YZ-Heading,ZX-Heading\n")
 except:
     pass
 
@@ -246,22 +254,29 @@ while True:
     elapsed_time = current_time - start_time
     
     if uart.any():
-        ##### FORMAT: {heading},{pitch}
+        ##### FORMAT: {heading},{pitch},{declination_angle}
         b = uart.readline()
 
         try:
             msg = b.decode('utf-8')
-            #print("msg: ", msg)
+            #print("From Pi: ", msg, end="\r")
             msg_parts = msg.split(',')
-            #print("msg_parts: ", msg_parts)
             new_setpoint = int(msg_parts[0])
             pitch = int(msg_parts[1])
-            #print("New setpoint:", new_setpoint)
-            #print("Pitch:", pitch)
-            if (new_setpoint != None) and (new_setpoint >= 0) and (new_setpoint <= 360):
+            declination_angle = int(msg_parts[2])
+
+            if (new_setpoint != None):
                 integral = 0    # a new heading requires a reset to integral
                 setpoint = new_setpoint
+            elif setpoint < 0:
+                setpoint += 360
+            elif setpoint > 360:
+                setpoint -= 360
+            
+            if (declination_angle >= -90) and (declination_angle <= 90):
+                declination = declination_angle
                 # set camera servo here
+            
             if (pitch >= 135):
                 # might need to fix this with an offset
                 servo_Angle(135)
@@ -269,29 +284,59 @@ while True:
                 servo_Angle(0)
             elif (pitch != None):
                 servo_Angle(pitch)
+                
+            print(f"SP: {setpoint}\tPITCH: {pitch}\tDECLIN: {declination}")
         except:
-            #print("error with importing heading and pitch")
+            print("error with importing heading and pitch")
             pass
     
     # Heading:
     # N = 0
     # S = 180
     x, y, z, temp = qmc5883.read_scaled()
+    
+    ##### Magnetometer Calibration
+#     x /= 0.9565
+#     y /= 1.0578
+#     z /= 0.9873
+#     
+#     x += 0.099
+#     y -= 0.109
+#     #z -= 0.037
+    
     heading = degrees(atan2(y, x))
-    smooth_heading = (heading + prev_heading_1 + prev_heading_2)/3
-    prev_heading_2 = prev_heading_1
-    prev_heading_1 = heading
+    heading2 = degrees(atan2(z, y))
+    heading3 = degrees(atan2(x, z))
+    
+    if heading < 0:
+        heading += 360
+    if heading > 360:
+        heading -= 360
+
+    if heading2 < 0:
+        heading2 += 360
+    if heading2 > 360:
+        heading2 -= 360
+        
+    if heading3 < 0:
+        heading3 += 360
+    if heading3 > 360:
+        heading3 -= 360
+
+    smooth_heading = declination + heading
+    #prev_heading_2 = prev_heading_1
+    #prev_heading_1 = heading
     ax = round(imu.accel.x, 2)
     ay = round(imu.accel.y, 2)
     az = round(imu.accel.z, 2)
     #print("Heading:\t", round(heading, 2), "IMU ax:\t", round(imu.accel.x, 2), "ay:\t", round(imu.accel.y, 2), "az:\t", round(imu.accel.z, 2), "integral\t", integral, end="\r")
     try:
-        log_file.write(f"{total_time},{x},{y},{z},{ax},{ay},{az},{smooth_heading},{output},{integral},{setpoint}\n")
+        log_file.write(f"{total_time},{x},{y},{z},{ax},{ay},{az},{output},{integral},{setpoint},{error},{smooth_heading},{heading2},{heading3}\n")
     except:
         pass
-    
-    sleep(0.05)
-    total_time += 0.05
+
+    sleep(0.025)
+    total_time += 0.025
     if total_time >= 30:
         PID_timer.deinit()
         break
@@ -300,3 +345,4 @@ while True:
 pwm_motor_top.duty_u16(0)
 pwm_motor_bottom.duty_u16(0)
 log_file.close()
+print("PROGRAM ENDED")

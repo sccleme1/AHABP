@@ -1,0 +1,17 @@
+Start log begin
+kp =30, ki =0, kd =0
+GPS is on UART(1, baudrate=9600, bits=8, parity=None, stop=1, tx=4, rx=5, txbuf=256, rxbuf=256, timeout=0, timeout_char=2, invert=None)
+Top motor on GP15
+Bottom motor on GP14
+ESC frequency 100 Hz
+Disarm: 3277
+PWM Base: 8300
+Servo motor on GP13
+
+Starting GPS, unused NMEA sentences:
+t = 0 b'$GPRMC,011612.00,V,,,,,,,150424,,,N*7E\r\n'
+t = 1 b'$GPGGA,011612.00,,,,,0,00,99.99,,,,,,*63\r\n'
+t = 2 b'$GPGSV,3,1,12,05,10,052,,10,31,248,,13,21,048,,15,50,069,*75\r\n'
+t = 3 b'$GPVTG,,,,,,,,,N*30\r\n'
+Latitude: 33.42017 Longitude: -111.9047
+Start log end

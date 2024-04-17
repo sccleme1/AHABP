@@ -1,0 +1,19 @@
+17 Apr 2024 13:14:35
+Latitude: 33.42017	Longitude: -111.9047
+Zenith: 3	Azimuth: 169	Declination: 9
+Heading: 169	Pitch: 3	Declination: 9
+Heading: 179	Pitch: 3	Declination: 9
+Saved picture 1 at 13:14:56
+Heading: 169	Pitch: 3	Declination: 9
+Saved picture 2 at 13:15:02
+Heading: 179	Pitch: 3	Declination: 9
+Saved picture 3 at 13:15:08
+Heading: 169	Pitch: 3	Declination: 9
+Heading: 179	Pitch: 3	Declination: 9
+Heading: 169	Pitch: 3	Declination: 9
+Saved picture 4 at 13:15:14
+Heading: 179	Pitch: 3	Declination: 9
+Heading: 169	Pitch: 3	Declination: 9
+Heading: 179	Pitch: 3	Declination: 9
+Saved picture 5 at 13:15:20
+Program ended at 2024-04-17 13:15:20.369181
